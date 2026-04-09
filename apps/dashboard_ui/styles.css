@@ -163,7 +163,7 @@ body {
   width: 0%;
   background: var(--black);
   border-radius: 999px;
-  transition: width 0.2s linear;
+  transition: width 1s linear;
 }
 
 .header-progress-time {
