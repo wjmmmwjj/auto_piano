@@ -1,3 +1,5 @@
+/* Auto Piano Dashboard — Frontend Logic */
+
 const state = {
   songs: [],
   tasks: [],
@@ -19,7 +21,7 @@ const state = {
   },
 };
 
-const elements = {
+const el = {
   summaryPlayStatus: document.getElementById("summaryPlayStatus"),
   summarySong: document.getElementById("summarySong"),
   summarySongMeta: document.getElementById("summarySongMeta"),
@@ -28,6 +30,7 @@ const elements = {
   playerPercent: document.getElementById("playerPercent"),
   playerTotal: document.getElementById("playerTotal"),
   stopPlaybackButton: document.getElementById("stopPlaybackButton"),
+  safeZeroButton: document.getElementById("safeZeroButton"),
   songSearch: document.getElementById("songSearch"),
   songList: document.getElementById("songList"),
   taskTitle: document.getElementById("taskTitle"),
@@ -46,617 +49,434 @@ const elements = {
   toastLayer: document.getElementById("toastLayer"),
 };
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+/* ===== Helpers ===== */
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json", ...(opts.headers || {}) }, ...opts });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
+  return data;
+}
 
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : {};
-
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed: ${response.status}`);
+function toast(msg, type = "info") {
+  const d = document.createElement("div");
+  d.className = `toast ${type}`;
+  
+  let iconHtml = "";
+  if (type === "success") {
+    iconHtml = `<svg class="toast-icon success-icon"><use href="#icon-success"></use></svg>`;
+  } else if (type === "error") {
+    iconHtml = `<svg class="toast-icon error-icon"><use href="#icon-error"></use></svg>`;
   }
-
-  return payload;
+  
+  d.innerHTML = `${iconHtml}<div class="toast-content">${msg}</div>`;
+  el.toastLayer.appendChild(d);
+  setTimeout(() => d.remove(), 4000);
 }
 
-function showToast(message, type = "info") {
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  elements.toastLayer.appendChild(toast);
-  window.setTimeout(() => toast.remove(), 3200);
+function esc(v) {
+  return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function setText(e, v) { if (e && e.textContent !== v) e.textContent = v; }
+function setHtml(e, v) { if (e && e.innerHTML !== v) e.innerHTML = v; }
+
+function fmtDur(s) {
+  if (!Number.isFinite(s) || s < 0) return "--";
+  if (s < 60) return `${s.toFixed(1)}s`;
+  return `${Math.floor(s/60)}m ${Math.round(s%60)}s`;
 }
 
-function setText(element, nextValue) {
-  if (element.textContent !== nextValue) {
-    element.textContent = nextValue;
+function fmtClock(s) {
+  const t = Math.max(0, Math.floor(s || 0));
+  return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;
+}
+
+function fmtTime(ts) {
+  if (!ts) return "";
+  return new Date(ts * 1000).toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+}
+
+function formatDetailedTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  const YYYY = d.getFullYear();
+  const MM = String(d.getMonth() + 1).padStart(2, "0");
+  const DD = String(d.getDate()).padStart(2, "0");
+  const HH = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `[${YYYY}-${MM}-${DD} ${HH}:${mm}:${ss}]`;
+}
+
+function isActive(s) { return s === "running" || s === "stopping"; }
+function nearBottom(e, t = 28) { return e.scrollHeight - e.scrollTop - e.clientHeight <= t; }
+function curSong() { return state.songs.find(s => s.path === state.selectedSongPath) || null; }
+function activeTask(k) { return state.tasks.find(t => t.kind === k && isActive(t.status)) || null; }
+function latestTask(k) { return [...state.tasks].filter(t => t.kind === k).sort((a,b) => b.started_at - a.started_at)[0] || null; }
+function playbackTask() { return activeTask("playback"); }
+
+function mainLogTask() {
+  const running = state.tasks.filter(t => t.kind !== "transcribe").filter(t => isActive(t.status)).sort((a,b) => b.started_at - a.started_at);
+  if (running.length) return running[0];
+  return [...state.tasks].filter(t => t.kind !== "transcribe").sort((a,b) => b.started_at - a.started_at)[0] || null;
+}
+
+function getTaskDisplayName(t) {
+  if (t.kind === "safezero") return "全部按鍵歸零";
+  if (t.kind === "playback") return `播放 ${t.metadata?.song_name || "未知歌曲"}`;
+  if (t.kind === "sound") return "聲音橋接功能";
+  if (t.kind === "transcribe") {
+    let q = t.metadata?.query || "未知來源";
+    if (q.length > 25) q = q.substring(0, 25) + "...";
+    return `AI 轉譜 (${q})`;
   }
+  return t.title;
 }
 
-function setHtml(element, nextValue) {
-  if (element.innerHTML !== nextValue) {
-    element.innerHTML = nextValue;
+function compressLogs(lines) {
+  const res = [];
+  for (const line of lines) {
+    if (line.includes("Progress:")) {
+      const trimmed = line.trim();
+      const prefixMatch = trimmed.match(/^Progress:\s+(\w+)/);
+      if (prefixMatch) {
+        const prefix = prefixMatch[0];
+        if (res.length > 0 && res[res.length - 1].trim().startsWith(prefix)) {
+          res[res.length - 1] = line;
+          continue;
+        }
+      } else if (res.length > 0 && res[res.length - 1].trim().startsWith("Progress:")) {
+        res[res.length - 1] = line;
+        continue;
+      }
+    }
+    res.push(line);
   }
+  return res;
 }
 
-function formatDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return "--";
-  }
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remain = Math.round(seconds % 60);
-  return `${minutes}m ${remain}s`;
+function aiLogTask() { return activeTask("transcribe") || latestTask("transcribe"); }
+function playbackPath() { return playbackTask()?.metadata?.song_path || ""; }
+
+function songSig() {
+  const pp = playbackPath();
+  const kw = el.songSearch.value.trim().toLowerCase();
+  const base = state.songs.map(s => `${s.path}|${s.modified_at}`).join("::");
+  return `${kw}__${state.selectedSongPath}__${pp}__${base}`;
 }
 
-function formatClock(seconds) {
-  const safe = Math.max(0, Math.floor(seconds || 0));
-  const minutes = Math.floor(safe / 60);
-  const remain = safe % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remain).padStart(2, "0")}`;
-}
-
-function formatTime(timestamp) {
-  if (!timestamp) {
-    return "未知時間";
-  }
-  return new Date(timestamp * 1000).toLocaleString("zh-TW", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function isActiveStatus(status) {
-  return status === "running" || status === "stopping";
-}
-
-function isNearBottom(element, threshold = 28) {
-  return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold;
-}
-
-function currentSong() {
-  return state.songs.find((song) => song.path === state.selectedSongPath) || null;
-}
-
-function activeTask(kind) {
-  return state.tasks.find((task) => task.kind === kind && isActiveStatus(task.status)) || null;
-}
-
-function latestTaskByKind(kind) {
-  return [...state.tasks]
-    .filter((task) => task.kind === kind)
-    .sort((a, b) => b.started_at - a.started_at)[0] || null;
-}
-
-function currentPlaybackTask() {
-  return activeTask("playback");
-}
-
-function currentMainLogTask() {
-  const running = state.tasks
-    .filter((task) => task.kind !== "transcribe")
-    .filter((task) => isActiveStatus(task.status))
-    .sort((a, b) => b.started_at - a.started_at);
-
-  if (running.length) {
-    return running[0];
-  }
-
-  return [...state.tasks]
-    .filter((task) => task.kind !== "transcribe")
-    .sort((a, b) => b.started_at - a.started_at)[0] || null;
-}
-
-function currentAiLogTask() {
-  return activeTask("transcribe") || latestTaskByKind("transcribe");
-}
-
-function currentPlaybackSongPath() {
-  const playbackTask = currentPlaybackTask();
-  return playbackTask?.metadata?.song_path || "";
-}
-
-function buildSongSignature() {
-  const playingPath = currentPlaybackSongPath();
-  const keyword = elements.songSearch.value.trim().toLowerCase();
-  const base = state.songs.map((song) => `${song.path}|${song.modified_at}`).join("::");
-  return `${keyword}__${state.selectedSongPath}__${playingPath}__${base}`;
-}
-
+/* ===== Render: Player ===== */
 function renderPlayer() {
-  const playbackTask = currentPlaybackTask();
-  const selectedSong = currentSong();
+  const pb = playbackTask();
+  const sel = curSong();
+  const sz = activeTask("safezero");
 
-  if (!playbackTask) {
-    setText(elements.summaryPlayStatus, "待機中");
-    setText(elements.summarySong, selectedSong ? selectedSong.name : "尚未播放歌曲");
-    setText(
-      elements.summarySongMeta,
-      selectedSong ? "已選取，按左側播放即可開始" : "從左側歌單挑一首歌後開始播放",
-    );
-    elements.playerProgressFill.style.width = "0%";
-    setText(elements.playerElapsed, "00:00");
-    setText(elements.playerPercent, "0%");
-    setText(elements.playerTotal, "00:00");
-    elements.stopPlaybackButton.disabled = true;
-    setText(elements.stopPlaybackButton, "停止播放");
+  if (!pb) {
+    setText(el.summaryPlayStatus, "待機中");
+    setText(el.summarySong, sel ? sel.name : "尚未選擇歌曲");
+    setText(el.summarySongMeta, sel ? "已選取" : "");
+    el.playerProgressFill.style.width = "0%";
+    setText(el.playerElapsed, "00:00");
+    setText(el.playerPercent, "0%");
+    setText(el.playerTotal, "00:00");
+    el.stopPlaybackButton.disabled = true;
+    setText(el.stopPlaybackButton, "停止播放");
+    el.safeZeroButton.disabled = !!sz;
+    setText(el.safeZeroButton, sz ? "歸零中..." : "全部按鍵歸零");
     return;
   }
 
-  const total = Number(playbackTask.metadata?.total_duration_sec || 0);
-  const elapsed = total > 0 ? Math.min(total, playbackTask.duration_sec) : playbackTask.duration_sec;
-  const percent = total > 0 ? Math.min(100, (elapsed / total) * 100) : 0;
+  const total = Number(pb.metadata?.total_duration_sec || 0);
+  const elapsed = total > 0 ? Math.min(total, pb.duration_sec) : pb.duration_sec;
+  const pct = total > 0 ? Math.min(100, (elapsed / total) * 100) : 0;
 
-  setText(elements.summaryPlayStatus, playbackTask.status === "stopping" ? "停止播放中" : "目前播放");
-  setText(elements.summarySong, playbackTask.metadata?.song_name || playbackTask.title || "未命名歌曲");
-  setText(
-    elements.summarySongMeta,
-    total > 0 ? `${formatClock(elapsed)} / ${formatClock(total)}` : `已播放 ${formatDuration(playbackTask.duration_sec)}`,
-  );
-  elements.playerProgressFill.style.width = `${percent}%`;
-  setText(elements.playerElapsed, formatClock(elapsed));
-  setText(elements.playerPercent, total > 0 ? `${Math.round(percent)}%` : "估算中");
-  setText(elements.playerTotal, total > 0 ? formatClock(total) : "--:--");
-  elements.stopPlaybackButton.disabled = playbackTask.status === "stopping";
-  setText(elements.stopPlaybackButton, playbackTask.status === "stopping" ? "停止中..." : "停止播放");
+  setText(el.summaryPlayStatus, pb.status === "stopping" ? "停止中" : "播放中");
+  setText(el.summarySong, pb.metadata?.song_name || pb.title || "未知歌曲");
+  setText(el.summarySongMeta, total > 0 ? `${fmtClock(elapsed)} / ${fmtClock(total)}` : `${fmtDur(pb.duration_sec)}`);
+  el.playerProgressFill.style.width = `${pct}%`;
+  setText(el.playerElapsed, fmtClock(elapsed));
+  setText(el.playerPercent, total > 0 ? `${Math.round(pct)}%` : "...");
+  setText(el.playerTotal, total > 0 ? fmtClock(total) : "--:--");
+  el.stopPlaybackButton.disabled = pb.status === "stopping";
+  setText(el.stopPlaybackButton, pb.status === "stopping" ? "停止中..." : "停止播放");
+  el.safeZeroButton.disabled = true;
+  setText(el.safeZeroButton, "全部按鍵歸零");
 }
 
+/* ===== Render: Songs ===== */
 function renderSongs(force = false) {
-  const signature = buildSongSignature();
-  if (!force && state.ui.songSignature === signature) {
-    return;
-  }
-
-  const keyword = elements.songSearch.value.trim().toLowerCase();
-  const playingPath = currentPlaybackSongPath();
-  const filtered = state.songs.filter((song) => song.name.toLowerCase().includes(keyword));
+  const sig = songSig();
+  if (!force && state.ui.songSignature === sig) return;
+  const kw = el.songSearch.value.trim().toLowerCase();
+  const pp = playbackPath();
+  const filtered = state.songs.filter(s => s.name.toLowerCase().includes(kw));
 
   if (!filtered.length) {
-    elements.songList.innerHTML = '<div class="empty-state">找不到符合條件的歌曲。</div>';
-    state.ui.songSignature = signature;
+    el.songList.innerHTML = '<div class="empty-state">找不到符合條件的歌曲。</div>';
+    state.ui.songSignature = sig;
     return;
   }
 
-  elements.songList.innerHTML = filtered
-    .map((song) => {
-      const isSelected = song.path === state.selectedSongPath;
-      const isPlaying = song.path === playingPath;
-      return `
-        <article class="song-item${isSelected ? " is-selected" : ""}${isPlaying ? " is-playing" : ""}" data-song-path="${escapeHtml(song.path)}">
-          <div class="song-main">
-            <div class="song-topline">
-              <div class="song-name">${escapeHtml(song.name)}</div>
-              ${isPlaying ? '<span class="song-badge">播放中</span>' : ""}
-            </div>
-            <div class="song-meta">${escapeHtml(song.relative_path)} · ${escapeHtml(formatTime(song.modified_at))}</div>
+  el.songList.innerHTML = filtered.map(s => {
+    const isSel = s.path === state.selectedSongPath;
+    const isPlay = s.path === pp;
+    return `
+      <article class="song-item${isSel ? " is-selected" : ""}${isPlay ? " is-playing" : ""}" data-song-path="${esc(s.path)}">
+        <div class="song-main">
+          <div class="song-topline">
+            <div class="song-name">${esc(s.name)}</div>
+            ${isPlay ? '<span class="song-badge">播放中</span>' : ""}
           </div>
-          <button class="mini-button song-play" type="button" data-play-song="${escapeHtml(song.path)}" ${isPlaying ? "disabled" : ""}>
-            ${isPlaying ? "播放中" : "播放"}
-          </button>
-        </article>
-      `;
-    })
-    .join("");
-
-  state.ui.songSignature = signature;
+          <div class="song-meta">${esc(s.relative_path)} · ${esc(fmtTime(s.modified_at))}</div>
+        </div>
+        <button class="mini-button song-play" type="button" data-play-song="${esc(s.path)}" ${isPlay ? "disabled" : ""}>
+          ${isPlay ? "播放中" : "播放"}
+        </button>
+      </article>`;
+  }).join("");
+  state.ui.songSignature = sig;
 }
 
+/* ===== Render: Sound ===== */
 function renderSound() {
-  const soundTask = activeTask("sound");
-  const isRunning = Boolean(soundTask);
-
-  setText(
-    elements.soundStatusText,
-    isRunning ? `已開啟，持續 ${formatDuration(soundTask.duration_sec)}` : "目前已關閉",
-  );
-  setText(elements.soundToggleButton, isRunning ? "關閉聲音" : "開啟聲音");
-  elements.soundToggleButton.className = isRunning ? "danger-button" : "primary-button";
+  const st = activeTask("sound");
+  const on = Boolean(st);
+  setText(el.soundStatusText, on ? `開啟 · ${fmtDur(st.duration_sec)}` : "已關閉");
+  setText(el.soundToggleButton, on ? "關閉聲音" : "開啟聲音");
+  el.soundToggleButton.className = on ? "btn btn-danger" : "btn btn-primary";
 }
 
+/* ===== Render: Transcribe ===== */
 function renderTranscribe() {
-  const transcribeTask = activeTask("transcribe");
-  const isRunning = Boolean(transcribeTask);
-
-  setText(
-    elements.transcribeStatusText,
-    isRunning ? `Auto 轉譜進行中，已執行 ${formatDuration(transcribeTask.duration_sec)}` : "固定使用 Auto 模式，只要貼上來源後開始轉譜。",
-  );
-  setText(elements.transcribeButton, isRunning ? "停止轉譜" : "開始轉譜");
-  elements.transcribeButton.className = isRunning ? "danger-button" : "primary-button";
-  elements.transcribeQuery.disabled = isRunning;
+  const tt = activeTask("transcribe");
+  const on = Boolean(tt);
+  setText(el.transcribeStatusText, on ? `執行中 · ${fmtDur(tt.duration_sec)}` : "準備好開始轉譜。");
+  setText(el.transcribeButton, on ? "停止轉譜" : "開始轉譜");
+  el.transcribeButton.className = on ? "btn btn-danger" : "btn btn-primary";
+  el.transcribeQuery.disabled = on;
 }
 
-function buildResultHtml(task) {
-  if (!task?.result || !Object.keys(task.result).length) {
-    return "";
-  }
-
-  const lines = [];
-  if (task.result.song_name) {
-    lines.push(`歌曲：${escapeHtml(task.result.song_name)}`);
-  }
-  if (task.result.provider_name) {
-    lines.push(`轉譜來源：${escapeHtml(task.result.provider_name)}`);
-  }
-  if (task.result.score_path) {
-    lines.push(`輸出檔案：${escapeHtml(task.result.score_path)}`);
-  }
-  if (task.result.youtube_url) {
-    lines.push(`影片來源：${escapeHtml(task.result.youtube_url)}`);
-  }
-
-  if (!lines.length) {
-    return "";
-  }
-
-  return `<strong>任務結果</strong><br>${lines.join("<br>")}`;
+/* ===== Render: Result HTML ===== */
+function buildResult(task) {
+  return "";
 }
 
+/* ===== Render: Logs ===== */
 function renderLogs() {
-  const task = currentMainLogTask();
-
-  if (!task) {
+  const allTasks = [...state.tasks].sort((a,b) => a.started_at - b.started_at);
+  
+  if (!allTasks.length) {
     if (!state.ui.emptyLogShown) {
-      setText(elements.taskTitle, "目前沒有任務");
-      setText(elements.taskMeta, "開始播放或開啟聲音後，這裡會顯示主流程日誌。");
-      setText(elements.taskLogs, "等待新的任務輸出...");
-      elements.taskResultCard.classList.add("hidden");
-      elements.taskResultCard.innerHTML = "";
-      state.ui.logTaskId = "";
-      state.ui.logText = "等待新的任務輸出...";
-      state.ui.logMeta = elements.taskMeta.textContent;
-      state.ui.logTitle = elements.taskTitle.textContent;
-      state.ui.resultHtml = "";
+      setText(el.taskTitle, "執行日誌");
+      setText(el.taskMeta, "等待任務...");
+      setText(el.taskLogs, "就緒。");
+      el.taskResultCard.classList.add("hidden");
+      el.taskResultCard.innerHTML = "";
+      state.ui.logTaskId = ""; state.ui.logText = "就緒。"; state.ui.resultHtml = "";
       state.ui.emptyLogShown = true;
     }
     return;
   }
-
   state.ui.emptyLogShown = false;
-
-  const nextTitle = task.title;
-  const nextMeta = `${task.kind} · ${task.status} · ${formatTime(task.started_at)} · ${formatDuration(task.duration_sec)}`;
-  const nextLogText = (task.logs || task.log_tail || []).join("\n") || "目前沒有新的日誌輸出。";
-
-  if (state.ui.logTitle !== nextTitle) {
-    setText(elements.taskTitle, nextTitle);
-    state.ui.logTitle = nextTitle;
-  }
-
-  if (state.ui.logMeta !== nextMeta) {
-    setText(elements.taskMeta, nextMeta);
-    state.ui.logMeta = nextMeta;
-  }
-
-  if (state.ui.logTaskId !== task.id || state.ui.logText !== nextLogText) {
-    const shouldStick = state.ui.logTaskId !== task.id || isNearBottom(elements.taskLogs);
-    const previousBottomOffset = elements.taskLogs.scrollHeight - elements.taskLogs.scrollTop;
-    setText(elements.taskLogs, nextLogText);
-
-    if (shouldStick) {
-      elements.taskLogs.scrollTop = elements.taskLogs.scrollHeight;
+  
+  const events = [];
+  for (const t of allTasks) {
+    const titleObj = getTaskDisplayName(t);
+    events.push(`${formatDetailedTime(t.started_at)} 開始：${titleObj}`);
+    if (t.ended_at) {
+      let statusStr = t.status === "completed" ? "完成" : (t.status === "failed" ? "失敗" : "中斷");
+      events.push(`${formatDetailedTime(t.ended_at)} ${titleObj}${statusStr}`);
+    } else if (t.status === "stopping") {
+      events.push(`${formatDetailedTime(Date.now() / 1000)} 正在停止：${titleObj}...`);
     } else {
-      elements.taskLogs.scrollTop = Math.max(0, elements.taskLogs.scrollHeight - previousBottomOffset);
+      // If running and it's transcribe, could optionally show progress 
+      // but the user only asked for start and stop.
     }
-
-    state.ui.logTaskId = task.id;
-    state.ui.logText = nextLogText;
   }
 
-  const nextResultHtml = buildResultHtml(task);
+  const logText = events.join("\n") || "沒有輸出。";
+  const activeCount = allTasks.filter(t => isActive(t.status)).length;
+  const meta = activeCount > 0 ? `有 ${activeCount} 個任務正在執行` : "所有任務已結束";
 
-  if (state.ui.resultHtml !== nextResultHtml) {
-    if (nextResultHtml) {
-      setHtml(elements.taskResultCard, nextResultHtml);
-      elements.taskResultCard.classList.remove("hidden");
-    } else {
-      elements.taskResultCard.classList.add("hidden");
-      elements.taskResultCard.innerHTML = "";
-    }
-    state.ui.resultHtml = nextResultHtml;
+  if (state.ui.logTitle !== "執行日誌") { setText(el.taskTitle, "執行日誌"); state.ui.logTitle = "執行日誌"; }
+  if (state.ui.logMeta !== meta) { setText(el.taskMeta, meta); state.ui.logMeta = meta; }
+  
+  if (state.ui.logText !== logText) {
+    const stick = nearBottom(el.taskLogs);
+    setText(el.taskLogs, logText);
+    if (stick) el.taskLogs.scrollTop = el.taskLogs.scrollHeight;
+    state.ui.logText = logText;
+  }
+  
+  const mainTasksOnly = allTasks.filter(t => t.kind !== "transcribe");
+  const lastMainTask = mainTasksOnly[mainTasksOnly.length - 1];
+  const rh = buildResult(lastMainTask);
+  if (state.ui.resultHtml !== rh) {
+    if (rh) { setHtml(el.taskResultCard, rh); el.taskResultCard.classList.remove("hidden"); }
+    else { el.taskResultCard.classList.add("hidden"); el.taskResultCard.innerHTML = ""; }
+    state.ui.resultHtml = rh;
   }
 }
 
+/* ===== Render: AI Logs ===== */
 function renderAiLogs() {
-  const task = currentAiLogTask();
-
+  const task = aiLogTask();
   if (!task) {
     if (!state.ui.emptyAiLogShown) {
-      setText(elements.aiTaskTitle, "AI 日誌");
-      setText(elements.aiTaskMeta, "尚未開始 AI 轉譜任務。");
-      setText(elements.aiTaskLogs, "等待 AI 任務輸出...");
-      elements.aiResultCard.classList.add("hidden");
-      elements.aiResultCard.innerHTML = "";
-      state.ui.aiLogTaskId = "";
-      state.ui.aiLogText = "等待 AI 任務輸出...";
-      state.ui.aiLogMeta = elements.aiTaskMeta.textContent;
-      state.ui.aiLogTitle = elements.aiTaskTitle.textContent;
-      state.ui.aiResultHtml = "";
-      state.ui.emptyAiLogShown = true;
+      setText(el.aiTaskTitle, "AI 日誌");
+      setText(el.aiTaskMeta, "尚未有 AI 任務。");
+      setText(el.aiTaskLogs, "等待 AI 輸出...");
+      el.aiResultCard.classList.add("hidden");
+      el.aiResultCard.innerHTML = "";
+      state.ui.aiLogTaskId = ""; state.ui.aiLogText = "等待 AI 輸出...";
+      state.ui.aiResultHtml = ""; state.ui.emptyAiLogShown = true;
     }
     return;
   }
-
   state.ui.emptyAiLogShown = false;
+  const title = isActive(task.status) ? "AI 即時轉寫" : "最近一次 AI 任務";
+  const meta = `${task.status} · ${fmtTime(task.started_at)} · ${fmtDur(task.duration_sec)}`;
+  const rawLogs = task.logs || task.log_tail || [];
+  const logText = compressLogs(rawLogs).join("\n") || "沒有 AI 輸出。";
 
-  const nextTitle = task.status === "running" || task.status === "stopping" ? "AI 即時日誌" : "最近一次 AI 任務";
-  const nextMeta = `${task.status} · ${formatTime(task.started_at)} · ${formatDuration(task.duration_sec)}`;
-  const nextLogText = (task.logs || task.log_tail || []).join("\n") || "目前沒有新的 AI 日誌輸出。";
-
-  if (state.ui.aiLogTitle !== nextTitle) {
-    setText(elements.aiTaskTitle, nextTitle);
-    state.ui.aiLogTitle = nextTitle;
+  if (state.ui.aiLogTitle !== title) { setText(el.aiTaskTitle, title); state.ui.aiLogTitle = title; }
+  if (state.ui.aiLogMeta !== meta) { setText(el.aiTaskMeta, meta); state.ui.aiLogMeta = meta; }
+  if (state.ui.aiLogTaskId !== task.id || state.ui.aiLogText !== logText) {
+    const stick = state.ui.aiLogTaskId !== task.id || nearBottom(el.aiTaskLogs);
+    setText(el.aiTaskLogs, logText);
+    if (stick) el.aiTaskLogs.scrollTop = el.aiTaskLogs.scrollHeight;
+    state.ui.aiLogTaskId = task.id; state.ui.aiLogText = logText;
   }
-
-  if (state.ui.aiLogMeta !== nextMeta) {
-    setText(elements.aiTaskMeta, nextMeta);
-    state.ui.aiLogMeta = nextMeta;
-  }
-
-  if (state.ui.aiLogTaskId !== task.id || state.ui.aiLogText !== nextLogText) {
-    const shouldStick = state.ui.aiLogTaskId !== task.id || isNearBottom(elements.aiTaskLogs);
-    const previousBottomOffset = elements.aiTaskLogs.scrollHeight - elements.aiTaskLogs.scrollTop;
-    setText(elements.aiTaskLogs, nextLogText);
-
-    if (shouldStick) {
-      elements.aiTaskLogs.scrollTop = elements.aiTaskLogs.scrollHeight;
-    } else {
-      elements.aiTaskLogs.scrollTop = Math.max(0, elements.aiTaskLogs.scrollHeight - previousBottomOffset);
-    }
-
-    state.ui.aiLogTaskId = task.id;
-    state.ui.aiLogText = nextLogText;
-  }
-
-  const nextResultHtml = buildResultHtml(task);
-  if (state.ui.aiResultHtml !== nextResultHtml) {
-    if (nextResultHtml) {
-      setHtml(elements.aiResultCard, nextResultHtml);
-      elements.aiResultCard.classList.remove("hidden");
-    } else {
-      elements.aiResultCard.classList.add("hidden");
-      elements.aiResultCard.innerHTML = "";
-    }
-    state.ui.aiResultHtml = nextResultHtml;
+  const rh = buildResult(task);
+  if (state.ui.aiResultHtml !== rh) {
+    if (rh) { setHtml(el.aiResultCard, rh); el.aiResultCard.classList.remove("hidden"); }
+    else { el.aiResultCard.classList.add("hidden"); el.aiResultCard.innerHTML = ""; }
+    state.ui.aiResultHtml = rh;
   }
 }
 
-function renderStaticSections() {
-  renderPlayer();
-  renderSongs();
-  renderSound();
-  renderTranscribe();
-  renderLogs();
-  renderAiLogs();
+function renderAll() {
+  renderPlayer(); renderSongs(); renderSound(); renderTranscribe(); renderLogs(); renderAiLogs();
 }
 
+/* ===== Data Fetching ===== */
 async function refreshSongs() {
-  const payload = await api("/api/songs");
-  state.songs = payload.songs || [];
-
-  if (!state.selectedSongPath && state.songs.length) {
-    state.selectedSongPath = state.songs[0].path;
-  }
-
-  if (state.selectedSongPath && !state.songs.some((song) => song.path === state.selectedSongPath)) {
-    state.selectedSongPath = state.songs[0]?.path || "";
-  }
-
-  renderSongs(true);
-  renderPlayer();
+  const d = await api("/api/songs");
+  state.songs = d.songs || [];
+  if (!state.selectedSongPath && state.songs.length) state.selectedSongPath = state.songs[0].path;
+  if (state.selectedSongPath && !state.songs.some(s => s.path === state.selectedSongPath)) state.selectedSongPath = state.songs[0]?.path || "";
+  renderSongs(true); renderPlayer();
 }
 
 async function refreshTasks() {
-  const previousPlayingPath = currentPlaybackSongPath();
+  const prev = playbackPath();
+  const d = await api("/api/tasks");
+  state.tasks = d.tasks || [];
 
-  const payload = await api("/api/tasks");
-  state.tasks = payload.tasks || [];
-
-  const detailTargets = [currentMainLogTask(), currentAiLogTask()]
-    .filter(Boolean)
-    .reduce((map, task) => {
-      map.set(task.id, task);
-      return map;
-    }, new Map());
-
-  for (const task of detailTargets.values()) {
-    try {
-      const detail = await api(`/api/tasks/${task.id}`);
-      const index = state.tasks.findIndex((item) => item.id === detail.id);
-      if (index >= 0) {
-        state.tasks[index] = detail;
-      }
-    } catch (error) {
-      console.warn(error);
-    }
+  const targets = [mainLogTask(), aiLogTask()].filter(Boolean).reduce((m,t) => { m.set(t.id,t); return m; }, new Map());
+  for (const t of targets.values()) {
+    try { const det = await api(`/api/tasks/${t.id}`); const i = state.tasks.findIndex(x => x.id === det.id); if (i >= 0) state.tasks[i] = det; } catch(e) { console.warn(e); }
   }
-
-  renderPlayer();
-  renderSound();
-  renderTranscribe();
-  renderLogs();
-  renderAiLogs();
-
-  if (previousPlayingPath !== currentPlaybackSongPath()) {
-    renderSongs(true);
-  }
+  renderAll();
+  if (prev !== playbackPath()) renderSongs(true);
 }
 
-async function refreshAll() {
-  await Promise.all([refreshSongs(), refreshTasks()]);
-}
+async function refreshAll() { await Promise.all([refreshSongs(), refreshTasks()]); }
 
-async function createTask(path, payload, successMessage) {
-  await api(path, {
-    method: "POST",
-    body: JSON.stringify(payload || {}),
-  });
-  showToast(successMessage, "success");
+async function createTask(path, payload, msg) {
+  await api(path, { method: "POST", body: JSON.stringify(payload || {}) });
+  toast(msg, "success");
   await refreshTasks();
 }
 
-function requireSongPath(songPath) {
-  const value = (songPath || "").trim();
-  if (!value) {
-    showToast("請先選一首歌。", "error");
-    return "";
-  }
-  return value;
-}
+function requireSongPath(p) { const v = (p||"").trim(); if (!v) { toast("請先選取一首歌。", "error"); return ""; } return v; }
 
-async function withErrorToast(action, fallbackMessage) {
-  try {
-    await action();
-  } catch (error) {
-    showToast(`${fallbackMessage}：${error.message}`, "error");
-  }
-}
+async function withErr(fn, fallback) { try { await fn(); } catch(e) { toast(`${fallback}: ${e.message}`, "error"); } }
 
-async function stopTaskAndWait(taskId, timeoutMs = 12000) {
-  await api(`/api/tasks/${taskId}/stop`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-
+async function stopAndWait(id, timeout = 12000) {
+  await api(`/api/tasks/${id}/stop`, { method: "POST", body: JSON.stringify({}) });
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const detail = await api(`/api/tasks/${taskId}`);
-    if (!isActiveStatus(detail.status)) {
-      await refreshTasks();
-      return detail;
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 350));
+  while (Date.now() - start < timeout) {
+    const d = await api(`/api/tasks/${id}`);
+    if (!isActive(d.status)) { await refreshTasks(); return d; }
+    await new Promise(r => setTimeout(r, 350));
   }
-
   throw new Error("停止任務逾時");
 }
 
-async function startPlayback(songPath) {
-  const safeSongPath = requireSongPath(songPath);
-  if (!safeSongPath) {
-    return;
-  }
-
-  const runningPlayback = currentPlaybackTask();
-  if (runningPlayback && runningPlayback.metadata?.song_path === safeSongPath) {
-    showToast("這首歌正在播放中。");
-    return;
-  }
-
-  if (runningPlayback) {
-    showToast("正在切換歌曲...", "success");
-    await stopTaskAndWait(runningPlayback.id);
-  }
-
-  await createTask("/api/tasks/playback", {
-    song_path: safeSongPath,
-  }, "已開始播放");
+async function startPlayback(path) {
+  const sp = requireSongPath(path);
+  if (!sp) return;
+  const cur = playbackTask();
+  if (cur && cur.metadata?.song_path === sp) { toast("歌曲已經在播放中。", "error"); return; }
+  if (cur) { toast("正在切換歌曲...", "success"); await stopAndWait(cur.id); }
+  await createTask("/api/tasks/playback", { song_path: sp }, "已開始播放歌曲");
 }
 
+/* ===== Events ===== */
 function bindEvents() {
-  elements.songSearch.addEventListener("input", () => renderSongs(true));
+  el.songSearch.addEventListener("input", () => renderSongs(true));
 
-  elements.songList.addEventListener("click", (event) => {
-    const playButton = event.target.closest("[data-play-song]");
-    if (playButton) {
-      const songPath = playButton.dataset.playSong || "";
-      state.selectedSongPath = songPath;
-      renderSongs(true);
-      renderPlayer();
-      withErrorToast(() => startPlayback(songPath), "播放歌曲失敗");
+  el.songList.addEventListener("click", e => {
+    const pb = e.target.closest("[data-play-song]");
+    if (pb) {
+      const sp = pb.dataset.playSong || "";
+      state.selectedSongPath = sp;
+      renderSongs(true); renderPlayer();
+      withErr(() => startPlayback(sp), "播放失敗");
       return;
     }
-
-    const item = event.target.closest("[data-song-path]");
-    if (!item) {
-      return;
-    }
-
-    state.selectedSongPath = item.dataset.songPath || "";
-    renderSongs(true);
-    renderPlayer();
+    const item = e.target.closest("[data-song-path]");
+    if (item) { state.selectedSongPath = item.dataset.songPath || ""; renderSongs(true); renderPlayer(); }
   });
 
-  elements.stopPlaybackButton.addEventListener("click", () => withErrorToast(async () => {
-    const playbackTask = currentPlaybackTask();
-    if (!playbackTask) {
-      return;
-    }
-    await api(`/api/tasks/${playbackTask.id}/stop`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    showToast("正在停止播放", "success");
+  el.stopPlaybackButton.addEventListener("click", () => withErr(async () => {
+    const pb = playbackTask();
+    if (!pb) return;
+    await api(`/api/tasks/${pb.id}/stop`, { method: "POST", body: JSON.stringify({}) });
+    toast("正在停止播放", "success");
     await refreshTasks();
-  }, "停止播放失敗"));
+  }, "停止失敗"));
 
-  elements.soundToggleButton.addEventListener("click", () => withErrorToast(async () => {
-    const soundTask = activeTask("sound");
-    if (soundTask) {
-      await api(`/api/tasks/${soundTask.id}/stop`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      showToast("已送出關閉聲音指令", "success");
+  el.safeZeroButton.addEventListener("click", () => withErr(async () => {
+    if (activeTask("safezero")) return;
+    await createTask("/api/tasks/safezero", {}, "已發送按鍵歸零指令");
+  }, "歸零失敗"));
+
+  el.soundToggleButton.addEventListener("click", () => withErr(async () => {
+    const st = activeTask("sound");
+    if (st) {
+      await api(`/api/tasks/${st.id}/stop`, { method: "POST", body: JSON.stringify({}) });
+      toast("已送出關閉聲音指令", "success");
       await refreshTasks();
       return;
     }
+    await createTask("/api/tasks/sound", { backend: "auto" }, "聲音橋接已啟動");
+  }, "操作失敗"));
 
-    await createTask("/api/tasks/sound", {
-      backend: "auto",
-    }, "聲音橋接已啟動");
-  }, "切換聲音失敗"));
-
-  elements.transcribeButton.addEventListener("click", () => withErrorToast(async () => {
-    const transcribeTask = activeTask("transcribe");
-    if (transcribeTask) {
-      await api(`/api/tasks/${transcribeTask.id}/stop`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      showToast("已送出停止轉譜指令", "success");
+  el.transcribeButton.addEventListener("click", () => withErr(async () => {
+    const tt = activeTask("transcribe");
+    if (tt) {
+      await api(`/api/tasks/${tt.id}/stop`, { method: "POST", body: JSON.stringify({}) });
+      toast("已送出停止指令", "success");
       await refreshTasks();
       return;
     }
-
-    const query = elements.transcribeQuery.value.trim();
-    if (!query) {
-      showToast("請輸入歌名或 YouTube 連結。", "error");
-      return;
-    }
-
-    await createTask("/api/tasks/transcribe", {
-      query,
-      mode: "auto",
-    }, "已開始 AI 轉譜");
-  }, "AI 轉譜失敗"));
+    const q = el.transcribeQuery.value.trim();
+    if (!q) { toast("請輸入歌曲名稱或 YouTube 網址。", "error"); return; }
+    await createTask("/api/tasks/transcribe", { query: q, mode: "auto" }, "已開始 AI 自動轉譜");
+    el.transcribeQuery.value = "";
+  }, "轉譜發佈失敗"));
 }
 
+/* ===== Init ===== */
 async function init() {
   bindEvents();
-  renderStaticSections();
-  await withErrorToast(refreshAll, "載入 Dashboard 失敗");
-  window.setInterval(() => withErrorToast(refreshTasks, "更新任務失敗"), 2200);
-  window.setInterval(() => withErrorToast(refreshSongs, "更新歌單失敗"), 12000);
+  renderAll();
+  await withErr(refreshAll, "Dashboard load failed");
+  setInterval(() => withErr(refreshTasks, "Task refresh failed"), 2200);
+  setInterval(() => withErr(refreshSongs, "Song refresh failed"), 12000);
 }
 
 init();

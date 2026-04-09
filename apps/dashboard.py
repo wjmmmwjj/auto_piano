@@ -450,6 +450,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 response = self._start_transcription(payload)
             elif path == "/api/tasks/playback":
                 response = self._start_playback(payload)
+            elif path == "/api/tasks/safezero":
+                response = self._start_safezero(payload)
             elif path == "/api/tasks/visualize":
                 response = self._start_visualizer(payload)
             elif path == "/api/tasks/sound":
@@ -538,6 +540,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "com_port": com_port,
                 "overlap": overlap,
                 "total_duration_sec": total_duration_sec,
+            },
+        )
+
+    def _start_safezero(self, payload: dict[str, object]) -> dict[str, object]:
+        ensure_single_running("playback", "正在播放或歸零中，請先停止目前的進度。")
+        ensure_single_running("safezero", "指令已經在執行中。")
+        com_port = resolve_playback_port(str(payload.get("com_port", "") or ""))
+
+        command = [
+            str(choose_python()),
+            str(PLAYBACK_DIR / "play_score.py"),
+            "--safezero",
+        ]
+        if com_port:
+            command.extend(["--com", com_port])
+
+        return TASKS.start(
+            kind="safezero",
+            title="全部按鍵歸零",
+            command=command,
+            cwd=BASE_DIR,
+            metadata={
+                "com_port": com_port,
             },
         )
 

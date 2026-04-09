@@ -777,18 +777,25 @@ def normalize_resolved_song_name(title: str) -> str:
             score -= 120
         if re.search(r"\b(op\.?\s*\d+|no\.?\s*\d+|in\s+[a-g](?:\s+(?:minor|major))?)\b", segment, flags=re.I):
             score += 180
-        if re.search(r"[\u4e00-\u9fff]", segment):
-            score += min(80, len(segment))
+        # Reward CJK characters (Chinese & Japanese Katakana/Hiragana)
+        if re.search(r"[\u4e00-\u9fff\u3040-\u30ff]", segment):
+            score += min(80, len(segment) * 2)
         if re.search(r"\d", segment):
             score += 80
-        if "/" in segment:
-            score += 40
+        if "/" in segment and len(segment) > 5:
+            score += 10
         if re.fullmatch(r"[A-Za-z .&']{2,24}", segment) and len(segment.split()) <= 3 and not re.search(r"\d", segment):
             score -= 50
+        # Heavily penalize segments that have no alphanumeric or CJK chars
+        if not re.search(r"[A-Za-z0-9\u4e00-\u9fff\u3040-\u30ff]", segment):
+            score -= 500
+        # Penalize very short segments
+        if len(segment.strip()) < 2:
+           score -= 100
         return (score, len(segment))
 
     best_segment = max(segments, key=score_segment)
-    return best_segment.strip(" -|_")
+    return best_segment.strip(" -|_/")
 
 
 def derive_effective_song_name(user_input: str, source_info: dict[str, object]) -> str:

@@ -3,99 +3,129 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Auto Piano Dashboard</title>
+    <title>Auto Piano 控制中心</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <div class="app-shell">
-      <header class="player-bar panel">
-        <div class="player-head">
-          <div class="player-copy">
-            <div class="status-chip" id="summaryPlayStatus">待機中</div>
-            <div class="player-song" id="summarySong">尚未播放歌曲</div>
-            <div class="player-meta" id="summarySongMeta">從左側歌單挑一首歌後開始播放</div>
-          </div>
 
-          <div class="player-action">
-            <button class="danger-button" id="stopPlaybackButton" type="button" disabled>停止播放</button>
+      <!-- Top Header / Now Playing Bar -->
+      <header class="header-bar">
+        <div class="header-brand">
+          <svg class="brand-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="4" x2="6" y2="20"/><line x1="10" y1="4" x2="10" y2="20"/><line x1="14" y1="4" x2="14" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/></svg>
+          <span class="brand-name">Auto Piano</span>
+        </div>
+
+        <div class="header-player">
+          <div class="header-player-info">
+            <span class="header-status" id="summaryPlayStatus">待機中</span>
+            <span class="header-song" id="summarySong">尚未選擇歌曲</span>
+            <span class="header-meta" id="summarySongMeta"></span>
+          </div>
+          <div class="header-progress">
+            <div class="header-progress-track">
+              <div class="header-progress-fill" id="playerProgressFill"></div>
+            </div>
+            <div class="header-progress-time">
+              <span id="playerElapsed">00:00</span>
+              <span id="playerPercent">0%</span>
+              <span id="playerTotal">00:00</span>
+            </div>
           </div>
         </div>
 
-        <div class="player-progress-area">
-          <div class="player-progress-topline">
-            <span>播放進度</span>
-            <span id="playerPercent">0%</span>
-          </div>
-          <div class="player-progress-track" aria-hidden="true">
-            <div class="player-progress-fill" id="playerProgressFill"></div>
-          </div>
-          <div class="player-progress-meta">
-            <span id="playerElapsed">00:00</span>
-            <span id="playerTotal">00:00</span>
-          </div>
+        <div class="header-actions">
+          <button class="btn btn-ghost" id="safeZeroButton" type="button">全部按鍵歸零</button>
+          <button class="btn btn-danger" id="stopPlaybackButton" type="button" disabled>停止播放</button>
         </div>
       </header>
 
-      <main class="main-layout">
-        <aside class="panel song-panel">
-          <div class="panel-head">
-            <div class="eyebrow">Songs</div>
-            <h1>歌單</h1>
+      <!-- Main Content -->
+      <main class="main-grid">
+
+        <!-- Left: Song List -->
+        <aside class="panel panel-songs">
+          <div class="panel-header">
+            <span class="panel-label">歌曲庫</span>
+            <h2 class="panel-title">本機歌曲</h2>
           </div>
-
-          <input id="songSearch" class="text-input" type="text" placeholder="搜尋歌曲">
-
+          <input id="songSearch" class="search-input" type="text" placeholder="搜尋歌曲...">
           <div class="song-scroll" id="songScroll">
             <div class="song-list" id="songList"></div>
           </div>
         </aside>
 
-        <section class="panel log-panel">
-          <div class="panel-head">
-            <div class="eyebrow">Logs</div>
-            <h1>執行日誌</h1>
+        <!-- Center: Logs -->
+        <section class="panel panel-logs">
+          <div class="panel-header">
+            <span class="panel-label">系統監控</span>
+            <h2 class="panel-title" id="taskTitle">執行日誌</h2>
+            <p class="panel-desc" id="taskMeta">等待任務...</p>
           </div>
-
-          <div class="log-summary">
-            <div class="log-title" id="taskTitle">目前沒有任務</div>
-            <div class="log-meta" id="taskMeta">開始播放、轉譜或開啟聲音後，這裡會即時顯示目前動作。</div>
-          </div>
-
           <div class="result-card hidden" id="taskResultCard"></div>
-          <pre class="log-view" id="taskLogs">等待新的任務輸出...</pre>
+          <pre class="log-terminal" id="taskLogs">就緒。</pre>
         </section>
 
-        <aside class="control-stack">
-          <section class="panel control-card">
-            <div class="panel-head compact">
-              <div class="eyebrow">Sound</div>
-              <h1>按鍵聲音</h1>
-            </div>
-            <div class="control-status" id="soundStatusText">目前已關閉</div>
-            <p class="helper-text">只保留開關。啟動後，Mega 按鍵輸入會直接送到聲音橋接。</p>
-            <button class="primary-button" id="soundToggleButton" type="button">開啟聲音</button>
-          </section>
+        <!-- Right: Controls -->
+        <aside class="control-column">
 
-          <section class="panel control-card">
-            <div class="panel-head compact">
-              <div class="eyebrow">AI</div>
-              <h1>AI 轉譜</h1>
+          <!-- Sound -->
+          <div class="panel panel-control">
+            <div class="panel-header">
+              <span class="panel-label">音訊輸出</span>
+              <h2 class="panel-title">虛擬聲音</h2>
             </div>
-            <input id="transcribeQuery" class="text-input" type="text" placeholder="輸入歌名或 YouTube 連結">
-            <div class="control-status" id="transcribeStatusText">固定使用 Auto 模式，只要貼上來源後開始轉譜。</div>
-            <button class="primary-button" id="transcribeButton" type="button">開始轉譜</button>
-            <div class="mini-log-head">
-              <div class="mini-log-title" id="aiTaskTitle">AI 日誌</div>
-              <div class="mini-log-meta" id="aiTaskMeta">尚未開始 AI 轉譜任務。</div>
+            <p class="control-desc" id="soundStatusText">已關閉</p>
+            <p class="control-hint">啟動 MIDI 橋接將實體按鍵對應至軟體音源。</p>
+            <button class="btn btn-primary" id="soundToggleButton" type="button">開啟聲音</button>
+          </div>
+
+          <!-- AI Transcription -->
+          <div class="panel panel-control panel-ai">
+            <div class="panel-header">
+              <span class="panel-label">人工智慧</span>
+              <h2 class="panel-title">自動轉譜</h2>
             </div>
-            <div class="result-card hidden" id="aiResultCard"></div>
-            <pre class="mini-log-view" id="aiTaskLogs">等待 AI 任務輸出...</pre>
-          </section>
+            <input id="transcribeQuery" class="search-input" type="text" placeholder="請輸入歌曲名稱或 YouTube 網址">
+            <p class="control-desc" id="transcribeStatusText">準備好開始轉譜。</p>
+            <button class="btn btn-primary" id="transcribeButton" type="button">開始轉譜</button>
+
+            <!-- AI Result Card (shown on success) -->
+            <div class="ai-result-card hidden" id="aiResultCard"></div>
+
+            <!-- AI Logs -->
+            <div class="ai-log-section">
+              <div class="ai-log-header">
+                <span class="ai-log-title" id="aiTaskTitle">AI 日誌</span>
+                <span class="ai-log-meta" id="aiTaskMeta">尚未有 AI 任務。</span>
+              </div>
+              <pre class="log-terminal log-terminal-mini" id="aiTaskLogs">等待 AI 輸出...</pre>
+            </div>
+          </div>
+
         </aside>
       </main>
     </div>
 
+    <!-- Success Output Toasts will spawn here -->
     <div class="toast-layer" id="toastLayer"></div>
+    
+    <!-- Success UI Display Checkmark SVG Template (Hidden) -->
+    <svg style="display:none;" xmlns="http://www.w3.org/2000/svg">
+      <symbol id="icon-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </symbol>
+      <symbol id="icon-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="15" y1="9" x2="9" y2="15"></line>
+        <line x1="9" y1="9" x2="15" y2="15"></line>
+      </symbol>
+    </svg>
+
     <script src="./app.js" defer></script>
   </body>
 </html>
