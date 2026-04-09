@@ -13,6 +13,7 @@ if not exist "%BASE_DIR%.venv311\Scripts\python.exe" (
 )
 
 echo Starting Auto Piano Dashboard on http://127.0.0.1:8765
+start http://127.0.0.1:8765
 "%BASE_DIR%.venv311\Scripts\python.exe" "%BASE_DIR%apps\dashboard.py" %*
 if errorlevel 1 pause
 exit /b %errorlevel%
