@@ -54,10 +54,11 @@ def choose_mode() -> str:
     print(zh("\\u8acb\\u9078\\u64c7\\u8981\\u505a\\u7684\\u4e8b\\u60c5\\uff1a"))
     print(zh("  [1] \\u64ad\\u653e\\u5df2\\u6709\\u6b4c\\u66f2"))
     print(zh("  [2] \\u67e5\\u6b4c\\u4e26\\u81ea\\u52d5\\u8f49\\u8b5c"))
-    print(zh("  [3] \\u96e2\\u958b"))
+    print(zh("  [3] \\u5168\\u90e8\\u6309\\u9375\\u6b78\\u96f6"))
+    print(zh("  [4] \\u96e2\\u958b"))
     while True:
-        choice = input(zh("\\u8acb\\u8f38\\u5165 1 / 2 / 3\\uff1a")).strip()
-        if choice in {"1", "2", "3"}:
+        choice = input(zh("\\u8acb\\u8f38\\u5165 1 / 2 / 3 / 4\\uff1a")).strip()
+        if choice in {"1", "2", "3", "4"}:
             return choice
         print(zh("\\u8f38\\u5165\\u7121\\u6548\\uff0c\\u8acb\\u91cd\\u65b0\\u8f38\\u5165\\u3002"))
 
@@ -141,6 +142,13 @@ def run_play_mode() -> int:
     return subprocess.call([str(VENV_PYTHON), str(PLAYBACK_DIR / "play_score.py")], cwd=BASE_DIR)
 
 
+def run_safe_zero_mode() -> int:
+    require_installed_runtime()
+    require_modules({"serial": "pyserial"})
+    print()
+    return subprocess.call([str(VENV_PYTHON), str(PLAYBACK_DIR / "play_score.py"), "--safezero"], cwd=BASE_DIR)
+
+
 def run_search_mode() -> int:
     require_installed_runtime()
     require_modules(
@@ -206,13 +214,21 @@ def run_search_mode() -> int:
 def main() -> int:
     configure_utf8_console()
     try:
-        choice = choose_mode()
-        if choice == "1":
-            return run_play_mode()
-        if choice == "2":
-            return run_search_mode()
-        print(zh("\\u5df2\\u96e2\\u958b\\u3002"))
-        return 0
+        while True:
+            choice = choose_mode()
+            if choice == "1":
+                run_play_mode()
+            elif choice == "2":
+                run_search_mode()
+            elif choice == "3":
+                run_safe_zero_mode()
+            else:
+                print(zh("\\u5df2\\u96e2\\u958b\\u3002"))
+                return 0
+            
+            print()
+            print("-" * 50)
+            print()
     except KeyboardInterrupt:
         print("\n" + zh("\\u5df2\\u53d6\\u6d88\\u3002"))
         return 1

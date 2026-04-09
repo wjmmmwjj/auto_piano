@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import importlib.util
@@ -251,15 +251,10 @@ def resolve_playback_com_port(com_port: str | None, *, interactive: bool) -> str
     unknown_esp32_probe = next((probe for probe in likely_candidates if probe.mode == "unknown"), None)
 
     if tuner_probe is not None:
-        message = (
-            "有找到 ESP32，但目前燒錄的是調校韌體："
-            f"{tuner_probe.port} - {tuner_probe.description or '無描述'}。"
-            "因為沒有看到正式播放韌體的 READY 訊息，所以不會自動替你選擇 COM 埠。"
-        )
-        if interactive:
-            print(message)
-            return prompt_for_com_port(probes)
-        raise RuntimeError(message + "請改燒 esp32/motor_control/motor_control.ino，或用 --com 明確指定。")
+        description = tuner_probe.description or "無描述"
+        print(f"警告：有找到 ESP32，但目前燒錄的是調校韌體：{tuner_probe.port} - {description}")
+        print("將自動嘗試連線此埠。如需正式播放，請改燒 esp32/motor_control/motor_control.ino。")
+        return tuner_probe.port
 
     if len(likely_candidates) == 1:
         only_candidate = likely_candidates[0]
@@ -269,11 +264,24 @@ def resolve_playback_com_port(com_port: str | None, *, interactive: bool) -> str
             print("警告：目前還沒有看到正式播放韌體的 READY 訊息，會先直接嘗試連線。")
         return only_candidate.port
 
-    if unknown_esp32_probe is not None and interactive:
-        print("目前只有疑似 ESP32 的序列埠，但沒有看到正式播放韌體的 READY 訊息。")
-        print("因為沒有明確證據，所以這次不會自動替你選擇 COM 埠。")
+    if len(likely_candidates) > 1:
+        first_candidate = likely_candidates[0]
+        description = first_candidate.description or "無描述"
+        print(f"偵測到多個疑似 ESP32 的序列埠，自動選擇第一個：{first_candidate.port} - {description}")
+        if first_candidate.mode == "unknown":
+            print("警告：目前還沒有看到正式播放韌體的 READY 訊息，會先直接嘗試連線。")
+        return first_candidate.port
 
-    if interactive:
+    # 最後嘗試：從所有可用埠中找任何一個可開啟的
+    all_available = selectable_probes(probes)
+    if len(all_available) == 1:
+        only_port = all_available[0]
+        description = only_port.description or "無描述"
+        print(f"只偵測到一個可用序列埠，自動嘗試連線：{only_port.port} - {description}")
+        return only_port.port
+
+    if interactive and all_available:
+        print("無法自動判斷哪個是 ESP32，請手動選擇：")
         return prompt_for_com_port(probes)
 
     raise RuntimeError("找不到可確認為 ESP32 播放韌體的裝置；不會猜測 COM 埠。請確認板子已連線並回應 READY，或用 --com 指定。")
@@ -369,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--file", help="含有樂譜清單的 .py 檔路徑。")
     parser.add_argument("--com", help="ESP32 COM 埠；未指定時會自動匹配。")
     parser.add_argument("--overlap", type=int, default=3, help="管線重疊數（預設：3）")
+    parser.add_argument("--safezero", action="store_true", help="只執行全部按鍵歸零，不播放樂譜")
     return parser
 
 
@@ -378,11 +387,23 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        selected_com = resolve_playback_com_port(args.com, interactive=True)
+        if args.safezero:
+            print("執行全部按鍵歸零...")
+            ser = serial.Serial(selected_com, baudrate=115200, timeout=0.2)
+            try:
+                wait_for_ready(ser)
+                send_safe_zero(ser, 40)
+                print("歸零完成。")
+            finally:
+                ser.close()
+            return 0
+
         if args.song_name or args.file:
             path = resolve_score_path(args.song_name, args.file)
         else:
             path = prompt_for_score_path()
-        selected_com = resolve_playback_com_port(args.com, interactive=True)
+
         if path.suffix.lower() == ".txt":
             commands = load_commands_file(path)
             print(f"使用指令檔：{path}")
