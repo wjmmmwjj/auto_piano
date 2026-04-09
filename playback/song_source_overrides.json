@@ -1,0 +1,10 @@
+{
+  "_說明": "把歌曲名稱固定對應到正確影片來源。可填字串或物件。範例請改成你自己的網址。",
+  "範例歌曲": {
+    "youtube_url": "https://www.youtube.com/watch?v=example",
+    "aliases": [
+      "範例別名",
+      "Example Song"
+    ]
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "黑鍵練習曲": {
+    "aliases": [
+      "蕭邦黑鍵練習曲",
+      "肖邦黑鍵練習曲",
+      "Chopin Black Key Etude",
+      "Chopin Etude Op.10 No.5"
+    ],
+    "search_queries": [
+      "黑鍵練習曲 肖邦 鋼琴獨奏",
+      "Chopin Black Key Etude Op 10 No 5 piano solo",
+      "Chopin Etude Op 10 No 5 piano"
+    ],
+    "preferred_terms": [
+      "黑鍵練習曲",
+      "肖邦",
+      "蕭邦",
+      "Chopin",
+      "Etude",
+      "Op 10",
+      "No 5"
+    ],
+    "blocked_terms": [
+      "JJ Lin",
+      "林俊傑",
+      "Black Keys"
+    ]
+  },
+  "月光奏鳴曲": {
+    "aliases": [
+      "貝多芬月光奏鳴曲",
+      "Moonlight Sonata",
+      "Beethoven Sonata No.14"
+    ],
+    "search_queries": [
+      "月光奏鳴曲 貝多芬 鋼琴獨奏",
+      "Beethoven Moonlight Sonata piano solo"
+    ],
+    "preferred_terms": [
+      "月光奏鳴曲",
+      "Moonlight Sonata",
+      "貝多芬",
+      "Beethoven"
+    ],
+    "blocked_terms": [
+      "sleep",
+      "relax"
+    ]
+  },
+  "革命練習曲": {
+    "aliases": [
+      "蕭邦革命練習曲",
+      "肖邦革命練習曲",
+      "Revolutionary Etude",
+      "Chopin Op.10 No.12"
+    ],
+    "search_queries": [
+      "革命練習曲 肖邦 鋼琴獨奏",
+      "Chopin Revolutionary Etude Op 10 No 12 piano solo"
+    ],
+    "preferred_terms": [
+      "革命練習曲",
+      "Revolutionary Etude",
+      "肖邦",
+      "蕭邦",
+      "Chopin",
+      "Op 10",
+      "No 12"
+    ],
+    "blocked_terms": [
+      "tutorial",
+      "lesson"
+    ]
+  },
+  "給愛麗絲": {
+    "aliases": [
+      "貝多芬給愛麗絲",
+      "Für Elise",
+      "Fur Elise"
+    ],
+    "search_queries": [
+      "給愛麗絲 貝多芬 鋼琴獨奏",
+      "Beethoven Fur Elise piano solo"
+    ],
+    "preferred_terms": [
+      "給愛麗絲",
+      "Für Elise",
+      "Fur Elise",
+      "貝多芬",
+      "Beethoven"
+    ],
+    "blocked_terms": [
+      "easy",
+      "tutorial"
+    ]
+  },
+  "夢中的婚禮": {
+    "aliases": [
+      "理查克萊德曼 夢中的婚禮",
+      "Mariage d'amour",
+      "Richard Clayderman Mariage d'amour"
+    ],
+    "search_queries": [
+      "夢中的婚禮 鋼琴獨奏",
+      "Mariage d'amour piano solo"
+    ],
+    "preferred_terms": [
+      "夢中的婚禮",
+      "Mariage d'amour",
+      "理查克萊德曼",
+      "Richard Clayderman"
+    ],
+    "blocked_terms": [
+      "tutorial"
+    ]
+  },
+  "聖誕快樂勞倫斯先生": {
+    "aliases": [
+      "Merry Christmas Mr Lawrence",
+      "坂本龍一 Merry Christmas Mr Lawrence"
+    ],
+    "search_queries": [
+      "聖誕快樂勞倫斯先生 鋼琴獨奏",
+      "Merry Christmas Mr Lawrence piano solo"
+    ],
+    "preferred_terms": [
+      "聖誕快樂勞倫斯先生",
+      "Merry Christmas Mr Lawrence",
+      "坂本龍一",
+      "Ryuichi Sakamoto"
+    ],
+    "blocked_terms": [
+      "karaoke",
+      "tutorial"
+    ]
+  }
+}

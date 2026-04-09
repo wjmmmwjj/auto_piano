@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Auto Piano Dashboard</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="player-bar panel">
+        <div class="player-head">
+          <div class="player-copy">
+            <div class="status-chip" id="summaryPlayStatus">待機中</div>
+            <div class="player-song" id="summarySong">尚未播放歌曲</div>
+            <div class="player-meta" id="summarySongMeta">從左側歌單挑一首歌後開始播放</div>
+          </div>
+
+          <div class="player-action">
+            <button class="danger-button" id="stopPlaybackButton" type="button" disabled>停止播放</button>
+          </div>
+        </div>
+
+        <div class="player-progress-area">
+          <div class="player-progress-topline">
+            <span>播放進度</span>
+            <span id="playerPercent">0%</span>
+          </div>
+          <div class="player-progress-track" aria-hidden="true">
+            <div class="player-progress-fill" id="playerProgressFill"></div>
+          </div>
+          <div class="player-progress-meta">
+            <span id="playerElapsed">00:00</span>
+            <span id="playerTotal">00:00</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-layout">
+        <aside class="panel song-panel">
+          <div class="panel-head">
+            <div class="eyebrow">Songs</div>
+            <h1>歌單</h1>
+          </div>
+
+          <input id="songSearch" class="text-input" type="text" placeholder="搜尋歌曲">
+
+          <div class="song-scroll" id="songScroll">
+            <div class="song-list" id="songList"></div>
+          </div>
+        </aside>
+
+        <section class="panel log-panel">
+          <div class="panel-head">
+            <div class="eyebrow">Logs</div>
+            <h1>執行日誌</h1>
+          </div>
+
+          <div class="log-summary">
+            <div class="log-title" id="taskTitle">目前沒有任務</div>
+            <div class="log-meta" id="taskMeta">開始播放、轉譜或開啟聲音後，這裡會即時顯示目前動作。</div>
+          </div>
+
+          <div class="result-card hidden" id="taskResultCard"></div>
+          <pre class="log-view" id="taskLogs">等待新的任務輸出...</pre>
+        </section>
+
+        <aside class="control-stack">
+          <section class="panel control-card">
+            <div class="panel-head compact">
+              <div class="eyebrow">Sound</div>
+              <h1>按鍵聲音</h1>
+            </div>
+            <div class="control-status" id="soundStatusText">目前已關閉</div>
+            <p class="helper-text">只保留開關。啟動後，Mega 按鍵輸入會直接送到聲音橋接。</p>
+            <button class="primary-button" id="soundToggleButton" type="button">開啟聲音</button>
+          </section>
+
+          <section class="panel control-card">
+            <div class="panel-head compact">
+              <div class="eyebrow">AI</div>
+              <h1>AI 轉譜</h1>
+            </div>
+            <input id="transcribeQuery" class="text-input" type="text" placeholder="輸入歌名或 YouTube 連結">
+            <div class="control-status" id="transcribeStatusText">固定使用 Auto 模式，只要貼上來源後開始轉譜。</div>
+            <button class="primary-button" id="transcribeButton" type="button">開始轉譜</button>
+            <div class="mini-log-head">
+              <div class="mini-log-title" id="aiTaskTitle">AI 日誌</div>
+              <div class="mini-log-meta" id="aiTaskMeta">尚未開始 AI 轉譜任務。</div>
+            </div>
+            <div class="result-card hidden" id="aiResultCard"></div>
+            <pre class="mini-log-view" id="aiTaskLogs">等待 AI 任務輸出...</pre>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <div class="toast-layer" id="toastLayer"></div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+yt-dlp
+pretty_midi
+music21
+pyserial
+requests
+imageio-ffmpeg
+piano_transcription_inference
+basic-pitch
+pydub
+moduleconf

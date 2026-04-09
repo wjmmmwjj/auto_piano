@@ -1,0 +1,12 @@
+{
+  "_說明": [
+    "這個檔案用來設定本地模型與正式譜後處理工具。",
+    "bytedance_checkpoint_path 改用相對路徑，整個專案搬到別台電腦也能直接用。",
+    "transkun_command 可留空，程式會先嘗試用本機 transkun CLI 或 python -m transkun.transcribe。",
+    "midi2scoretransformer_command 可填字串或陣列，支援這些佔位符：{midi_path} {output_musicxml_path} {output_dir} {song_name} {safe_name}"
+  ],
+  "bytedance_checkpoint_path": ".models/piano_transcription_inference-1.0.0-2020-09-16.pth",
+  "midi2scoretransformer_command": "",
+  "prefer_device": "auto",
+  "transkun_command": ""
+}

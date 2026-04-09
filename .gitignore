@@ -1,0 +1,17 @@
+.venv*/
+.models/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.bak
+*.tmp
+*.log
+
+playback/outputs/
+
+config/_songscription_key.json
+config/_songscription_session.json
+
+.vscode/
+.idea/
